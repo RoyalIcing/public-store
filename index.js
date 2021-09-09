@@ -72,13 +72,13 @@ async function handleRequest(request, event) {
 
     event.waitUntil(Promise.resolve()
       .then(async function next() {
-        await new Promise(resolve => setTimeout(resolve, delay));
-
         const { value, done } = iterator.next();
         if (done) {
           writer.close();
           return;
         }
+
+        await new Promise(resolve => setTimeout(resolve, delay));
 
         const chunk = `data: ${JSON.stringify(value)}\n\n`;
         await writer.write(encoder.encode(chunk));
