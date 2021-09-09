@@ -1,5 +1,5 @@
 addEventListener('fetch', event => {
-  event.respondWith(handleRequest(event.request))
+  event.respondWith(handleRequest(event.request, event))
 })
 
 const notFound = init => init.status = 404;
@@ -12,8 +12,9 @@ const json = init => init.headers['content-type'] = 'text/json';
 /**
  * Respond with hello worker text
  * @param {Request} request
+ * @param {Event} event
  */
-async function handleRequest(request) {
+async function handleRequest(request, event) {
   const headers = new Headers();
 
   function allowCrossOrigin(origin = '*') {
@@ -30,6 +31,10 @@ async function handleRequest(request) {
     headers.set('content-type', 'application/json');
     return new Response(JSON.stringify(json), { status, headers });
   }
+  function resEventStream(stream, status = 200) {
+    headers.set('content-type', 'text/event-stream');
+    return new Response(stream, { status, headers });
+  }
   function resEmpty(status = 204) {
     return new Response(undefined, { status, headers });
   }
@@ -41,7 +46,7 @@ async function handleRequest(request) {
     switch (request.method) {
       case 'OPTIONS': return resEmpty();
       case 'GET': {
-        return resJSON(await listItems().then(data => data.result.map(parseFloat)));
+        return resJSON(await listItems());
       }
       case 'POST': {
         return resJSON(await addRandomItem());
@@ -53,6 +58,37 @@ async function handleRequest(request) {
         return resPlainText('Unsupported method', 405);
       }
     }
+  } else if (url.pathname === '/items/event-stream') {
+    allowCrossOrigin();
+    allowMethods('*');
+
+    const items = await listItems();
+    const iterator = items[Symbol.iterator]();
+
+    const delay = 1000;
+    const encoder = new TextEncoder()
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+
+    const streamPromise = Promise.resolve()
+      .then(async function next() {
+        await new Promise(resolve => setTimeout(resolve, delay));
+
+        const { value, done } = iterator.next();
+        if (done) {
+          writer.close();
+          return;
+        }
+
+        const chunk = `data: ${JSON.stringify(value)}\n\n`;
+        await writer.write(encoder.encode(chunk));
+
+        return next();
+      });
+    
+    event.waitUntil(streamPromise);
+    return resEventStream(readable);
+
   } else if (url.pathname.startsWith('/items/')) {
     allowCrossOrigin();
     allowMethods('*');
@@ -80,7 +116,7 @@ async function handleRequest(request) {
 }
 
 async function listItems() {
-  return postUpstash(['LRANGE', 'items', 0, 100]);
+  return postUpstash(['LRANGE', 'items', 0, 100]).then(data => data.result.map(parseFloat));
 }
 
 async function addRandomItem() {

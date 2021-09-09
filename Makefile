@@ -3,6 +3,9 @@ PRODUCTION_URL := https://public-store.collected.workers.dev
 production:
 	wrangler publish
 
+staging:
+	wrangler preview
+
 incr:
 	@curl -w '\n Latency: %{time_total}s\n' $(PRODUCTION_URL)/incr
 
@@ -23,3 +26,6 @@ replace_invalid_item:
 
 delete_items:
 	@curl -X DELETE -w '\n Latency: %{time_total}s\n' $(PRODUCTION_URL)/items
+
+stream_items:
+	@curl -w '\n Latency: %{time_total}s\n' $(PRODUCTION_URL)/items/event-stream
