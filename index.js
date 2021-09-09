@@ -70,7 +70,7 @@ async function handleRequest(request, event) {
     const { readable, writable } = new TransformStream();
     const writer = writable.getWriter();
 
-    const streamPromise = Promise.resolve()
+    event.waitUntil(Promise.resolve()
       .then(async function next() {
         await new Promise(resolve => setTimeout(resolve, delay));
 
@@ -84,9 +84,8 @@ async function handleRequest(request, event) {
         await writer.write(encoder.encode(chunk));
 
         return next();
-      });
+      }));
     
-    event.waitUntil(streamPromise);
     return resEventStream(readable);
 
   } else if (url.pathname.startsWith('/items/')) {
